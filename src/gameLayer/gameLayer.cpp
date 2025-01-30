@@ -10,6 +10,7 @@
 #include "imfilebrowser.h"
 #include <gl2d/gl2d.h>
 #include <platformTools.h>
+#include <tiledRenderer.h>
 
 /*
 * Tip 3: Put all gameplay related data in a struct
@@ -24,8 +25,12 @@ GameplayData data;
 
 gl2d::Renderer2D renderer;
 
+constexpr int BACKGROUNDS = 3;
+
 gl2d::Texture spaceShipTexture;
-gl2d::Texture backgroundTexture;
+
+gl2d::Texture backgroundTexture[BACKGROUNDS];
+TiledRenderer tiledRenderer[BACKGROUNDS];
 
 bool initGame()
 {
@@ -34,7 +39,15 @@ bool initGame()
 	renderer.create();
 
 	spaceShipTexture.loadFromFile(RESOURCES_PATH "spaceShip/ships/green.png", true);
-	
+
+	backgroundTexture[0].loadFromFile(RESOURCES_PATH "background1.png", true);
+	backgroundTexture[1].loadFromFile(RESOURCES_PATH "background2.png", true);
+	backgroundTexture[2].loadFromFile(RESOURCES_PATH "background3.png", true);
+
+	tiledRenderer[0].texture = backgroundTexture[0];
+	tiledRenderer[1].texture = backgroundTexture[1];
+	tiledRenderer[2].texture = backgroundTexture[2];
+
 	return true;
 }
 
@@ -89,15 +102,26 @@ bool gameLogic(float deltaTime)
 	if (move.x != 0 || move.y != 0)
 	{
 		move = glm::normalize(move);
-		move *= deltaTime * 200; // 200 pixels per second
+		move *= deltaTime * 1000; // 500 pixels per second
 		data.playerPos += move;
 	}
 
 #pragma endregion
 
+#pragma region render background
 
+	renderer.currentCamera.zoom = 0.5;
 
-	renderer.renderRectangle({data.playerPos, 100, 100}, spaceShipTexture);
+	for (int i = 0; i < BACKGROUNDS; i++)
+	{
+		tiledRenderer[i].render(renderer);
+	}
+
+#pragma endregion
+
+	renderer.currentCamera.follow(data.playerPos, deltaTime * 450, 10, 50, w, h);
+
+	renderer.renderRectangle({data.playerPos, 200, 200}, spaceShipTexture);
 
 
 	renderer.flush();
