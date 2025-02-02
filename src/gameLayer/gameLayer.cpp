@@ -48,6 +48,10 @@ bool initGame()
 	tiledRenderer[1].texture = backgroundTexture[1];
 	tiledRenderer[2].texture = backgroundTexture[2];
 
+	tiledRenderer[0].paralaxStrength = 0;
+	tiledRenderer[1].paralaxStrength = 0.4;
+	tiledRenderer[2].paralaxStrength = 0.7;
+
 	return true;
 }
 
@@ -59,11 +63,16 @@ bool gameLogic(float deltaTime)
 	int w = 0; int h = 0;
 	w = platform::getFrameBufferSizeX(); //window w
 	h = platform::getFrameBufferSizeY(); //window h
-	
+
 	glViewport(0, 0, w, h);
 	glClear(GL_COLOR_BUFFER_BIT); //clear screen
 
 	renderer.updateWindowMetrics(w, h);
+#pragma endregion
+
+#pragma region follow
+
+	renderer.currentCamera.follow(data.playerPos, deltaTime * 1450, 1, 50, w, h);
 #pragma endregion
 
 #pragma region movement
@@ -102,7 +111,7 @@ bool gameLogic(float deltaTime)
 	if (move.x != 0 || move.y != 0)
 	{
 		move = glm::normalize(move);
-		move *= deltaTime * 1000; // 500 pixels per second
+		move *= deltaTime * 2000; // 500 pixels per second
 		data.playerPos += move;
 	}
 
@@ -119,9 +128,33 @@ bool gameLogic(float deltaTime)
 
 #pragma endregion
 
-	renderer.currentCamera.follow(data.playerPos, deltaTime * 450, 10, 50, w, h);
+#pragma region mouse pos
 
-	renderer.renderRectangle({data.playerPos, 200, 200}, spaceShipTexture);
+	glm::vec2 mousePos = platform::getRelMousePosition();
+	glm::vec2 screenCenter(w / 2.f, h / 2.f);
+
+	glm::vec2 mouseDirection = mousePos - screenCenter;
+
+	if (glm::length(mouseDirection) == 0.f)
+	{
+		mouseDirection = { 1,0 };
+	}
+	else
+	{
+		mouseDirection = normalize(mouseDirection);
+	}
+
+	float spaceShipAngle = atan2(mouseDirection.y, -mouseDirection.x);
+
+#pragma endregion
+
+#pragma region render ship
+	
+	renderer.renderRectangle({ data.playerPos, 250, 250 }, spaceShipTexture,
+		Colors_White, {}, glm::degrees(spaceShipAngle) + 90.f);
+
+#pragma endregion
+	
 
 
 	renderer.flush();
