@@ -25,7 +25,7 @@ GameplayData data;
 
 gl2d::Renderer2D renderer;
 
-constexpr int BACKGROUNDS = 3;
+constexpr int BACKGROUNDS = 4;
 
 gl2d::Texture spaceShipTexture;
 
@@ -43,14 +43,20 @@ bool initGame()
 	backgroundTexture[0].loadFromFile(RESOURCES_PATH "background1.png", true);
 	backgroundTexture[1].loadFromFile(RESOURCES_PATH "background2.png", true);
 	backgroundTexture[2].loadFromFile(RESOURCES_PATH "background3.png", true);
+	backgroundTexture[3].loadFromFile(RESOURCES_PATH "background4.png", true);
+
 
 	tiledRenderer[0].texture = backgroundTexture[0];
 	tiledRenderer[1].texture = backgroundTexture[1];
 	tiledRenderer[2].texture = backgroundTexture[2];
+	tiledRenderer[3].texture = backgroundTexture[3];
+
 
 	tiledRenderer[0].paralaxStrength = 0;
-	tiledRenderer[1].paralaxStrength = 0.4;
-	tiledRenderer[2].paralaxStrength = 0.7;
+	tiledRenderer[1].paralaxStrength = 0.2;
+	tiledRenderer[2].paralaxStrength = 0.4;
+	tiledRenderer[3].paralaxStrength = 0.7;
+
 
 	return true;
 }
@@ -150,7 +156,9 @@ bool gameLogic(float deltaTime)
 
 #pragma region render ship
 	
-	renderer.renderRectangle({ data.playerPos, 250, 250 }, spaceShipTexture,
+	constexpr float shipSize = 250.f;
+	renderer.renderRectangle({ data.playerPos - glm::vec2(shipSize / 2,shipSize / 2)
+	, shipSize,shipSize }, spaceShipTexture,
 		Colors_White, {}, glm::degrees(spaceShipAngle) + 90.f);
 
 #pragma endregion
