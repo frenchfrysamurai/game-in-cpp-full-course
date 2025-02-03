@@ -11,6 +11,8 @@
 #include <gl2d/gl2d.h>
 #include <platformTools.h>
 #include <tiledRenderer.h>
+#include <bullet.h>
+#include <vector>
 
 /*
 * Tip 3: Put all gameplay related data in a struct
@@ -18,6 +20,8 @@
 struct GameplayData
 {
 	glm::vec2 playerPos = { 100,100 };
+
+	std::vector<Bullet> bullets;
 };
 
 GameplayData data;
@@ -27,7 +31,11 @@ gl2d::Renderer2D renderer;
 
 constexpr int BACKGROUNDS = 4;
 
-gl2d::Texture spaceShipTexture;
+gl2d::Texture spaceShipsTexture;
+gl2d::TextureAtlasPadding spaceShipsAtlas;
+
+gl2d::Texture bulletsTexture;
+gl2d::TextureAtlasPadding bulletsAtlas;
 
 gl2d::Texture backgroundTexture[BACKGROUNDS];
 TiledRenderer tiledRenderer[BACKGROUNDS];
@@ -38,7 +46,13 @@ bool initGame()
 	gl2d::init();
 	renderer.create();
 
-	spaceShipTexture.loadFromFile(RESOURCES_PATH "spaceShip/ships/green.png", true);
+	spaceShipsTexture.loadFromFileWithPixelPadding
+	(RESOURCES_PATH "spaceShip/stitchedFiles/spaceships.png", 128, true);
+	spaceShipsAtlas = gl2d::TextureAtlasPadding(5, 2, spaceShipsTexture.GetSize().x, spaceShipsTexture.GetSize().y);
+
+	bulletsTexture.loadFromFileWithPixelPadding
+	(RESOURCES_PATH "spaceShip/stichedFiles/projectiles.png", 500, true);
+	bulletsAtlas = gl2d::TextureAtlasPadding(3, 2, bulletsTexture.GetSize().x, bulletsTexture.GetSize().y);
 
 	backgroundTexture[0].loadFromFile(RESOURCES_PATH "background1.png", true);
 	backgroundTexture[1].loadFromFile(RESOURCES_PATH "background2.png", true);
@@ -61,6 +75,8 @@ bool initGame()
 	return true;
 }
 
+constexpr float shipSize = 250.f;
+
 
 
 bool gameLogic(float deltaTime)
@@ -70,56 +86,58 @@ bool gameLogic(float deltaTime)
 	w = platform::getFrameBufferSizeX(); //window w
 	h = platform::getFrameBufferSizeY(); //window h
 
-	glViewport(0, 0, w, h);
-	glClear(GL_COLOR_BUFFER_BIT); //clear screen
+glViewport(0, 0, w, h);
+glClear(GL_COLOR_BUFFER_BIT); //clear screen
 
-	renderer.updateWindowMetrics(w, h);
-#pragma endregion
-
-#pragma region follow
-
-	renderer.currentCamera.follow(data.playerPos, deltaTime * 1450, 1, 50, w, h);
+renderer.updateWindowMetrics(w, h);
 #pragma endregion
 
 #pragma region movement
 
-	glm::vec2 move = {};
+glm::vec2 move = {};
 
-	if (
-		platform::isButtonHeld(platform::Button::W) ||
-		platform::isButtonHeld(platform::Button::Up)
-		)
-	{
-		move.y = -1;
-	}
-	if (
-		platform::isButtonHeld(platform::Button::S) ||
-		platform::isButtonHeld(platform::Button::Down)
-		)
-	{
-		move.y = 1;
-	}
-	if (
-		platform::isButtonHeld(platform::Button::A) ||
-		platform::isButtonHeld(platform::Button::Left)
-		)
-	{
-		move.x = -1;
-	}
-	if (
-		platform::isButtonHeld(platform::Button::D) ||
-		platform::isButtonHeld(platform::Button::Right)
-		)
-	{
-		move.x = 1;
-	}
+if (
+	platform::isButtonHeld(platform::Button::W) ||
+	platform::isButtonHeld(platform::Button::Up)
+	)
+{
+	move.y = -1;
+}
+if (
+	platform::isButtonHeld(platform::Button::S) ||
+	platform::isButtonHeld(platform::Button::Down)
+	)
+{
+	move.y = 1;
+}
+if (
+	platform::isButtonHeld(platform::Button::A) ||
+	platform::isButtonHeld(platform::Button::Left)
+	)
+{
+	move.x = -1;
+}
+if (
+	platform::isButtonHeld(platform::Button::D) ||
+	platform::isButtonHeld(platform::Button::Right)
+	)
+{
+	move.x = 1;
+}
 
-	if (move.x != 0 || move.y != 0)
-	{
-		move = glm::normalize(move);
-		move *= deltaTime * 2000; // 500 pixels per second
-		data.playerPos += move;
-	}
+if (move.x != 0 || move.y != 0)
+{
+	move = glm::normalize(move);
+	move *= deltaTime * 2000; // 500 pixels per second
+	data.playerPos += move;
+}
+
+#pragma endregion
+
+#pragma region follow
+
+	renderer.currentCamera.follow(data.playerPos
+		, deltaTime * 550, 1, 150, w, h);
 
 #pragma endregion
 
@@ -129,37 +147,74 @@ bool gameLogic(float deltaTime)
 
 	for (int i = 0; i < BACKGROUNDS; i++)
 	{
-		tiledRenderer[i].render(renderer);
+		//tiledRenderer[i].render(renderer);
 	}
+
+	tiledRenderer[0].render(renderer);
 
 #pragma endregion
 
 #pragma region mouse pos
 
-	glm::vec2 mousePos = platform::getRelMousePosition();
-	glm::vec2 screenCenter(w / 2.f, h / 2.f);
+glm::vec2 mousePos = platform::getRelMousePosition();
+glm::vec2 screenCenter(w / 2.f, h / 2.f);
 
-	glm::vec2 mouseDirection = mousePos - screenCenter;
+glm::vec2 mouseDirection = mousePos - screenCenter;
 
-	if (glm::length(mouseDirection) == 0.f)
+if (glm::length(mouseDirection) == 0.f)
+{
+	mouseDirection = { 1,0 };
+}
+else
+{
+	mouseDirection = normalize(mouseDirection);
+}
+
+float spaceShipAngle = atan2(mouseDirection.y, -mouseDirection.x);
+
+#pragma endregion
+
+#pragma region handle bullets
+
+if (platform::isLMouseHeld())
+{
+	Bullet b;
+
+	b.position = data.playerPos;
+	b.fireDirection = mouseDirection;
+
+	data.bullets.push_back(b);
+}
+
+for (int i = 0; i < data.bullets.size(); i++)
+{
+	if (glm::distance(data.bullets[i].position, data.playerPos) > 5'000)
 	{
-		mouseDirection = { 1,0 };
-	}
-	else
-	{
-		mouseDirection = normalize(mouseDirection);
+		data.bullets.erase(data.bullets.begin() + i);
+		i--;
+		continue;
 	}
 
-	float spaceShipAngle = atan2(mouseDirection.y, -mouseDirection.x);
+	data.bullets[i].update(deltaTime);
+}
 
 #pragma endregion
 
 #pragma region render ship
 	
-	constexpr float shipSize = 250.f;
 	renderer.renderRectangle({ data.playerPos - glm::vec2(shipSize / 2,shipSize / 2)
-	, shipSize,shipSize }, spaceShipTexture,
-		Colors_White, {}, glm::degrees(spaceShipAngle) + 90.f);
+			, shipSize,shipSize }, spaceShipsTexture,
+			Colors_White, {}, glm::degrees(spaceShipAngle) + 90.f,
+			spaceShipsAtlas.get(3, 0));
+
+#pragma endregion
+
+#pragma region render bullets
+
+	for (auto& b : data.bullets)
+	{
+		b.render(renderer, bulletsTexture, bulletsAtlas);
+	}
 
 #pragma endregion
 	
@@ -170,6 +225,11 @@ bool gameLogic(float deltaTime)
 
 	//ImGui::ShowDemoWindow();
 
+	ImGui::Begin("debug");
+
+	ImGui::Text("Bullets count: %d", (int)data.bullets.size());
+
+	ImGui::End();
 
 	return true;
 #pragma endregion
