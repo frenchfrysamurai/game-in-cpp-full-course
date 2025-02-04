@@ -10,6 +10,19 @@ struct Enemy
 
 	glm::vec2 viewDirection = { 1,0 };
 
+	float speed = 1500.f;
+	float turnSpeed = 3.f;
+
+	float firedTime = 0.2;
+
+	float fireTimeReset = 1.f;
+	float fireRange = 1.5;
+	float bulletSpeed = 2000;
+
+	float life = 1.f;
+
 	void render(gl2d::Renderer2D& renderer, gl2d::Texture& sprites,
 		gl2d::TextureAtlasPadding& atlas);
+
+	bool update(float deltaTime, glm::vec2 playerPos);
 };

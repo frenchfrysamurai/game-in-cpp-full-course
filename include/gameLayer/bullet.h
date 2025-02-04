@@ -11,4 +11,6 @@ struct Bullet
 		);
 
 	void update(float deltaTime);
+
+	bool isEnemy = 0;
 };

@@ -14,6 +14,8 @@
 #include <bullet.h>
 #include <vector>
 #include <enemy.h>
+#include <cstdio>
+#include <glui/glui.h>
 
 struct GameplayData
 {
@@ -22,6 +24,8 @@ struct GameplayData
 	std::vector<Bullet> bullets;
 
 	std::vector<Enemy> enemies;
+
+	float health = 1.f;
 };
 
 
@@ -40,8 +44,25 @@ gl2d::TextureAtlasPadding bulletsAtlas;
 gl2d::Texture backgroundTexture[BACKGROUNDS];
 TiledRenderer tiledRenderer[BACKGROUNDS];
 
+gl2d::Texture healthBar;
+gl2d::Texture health;
+
+bool intersectBullet(glm::vec2 bulletPos, glm::vec2 shipPos, float shipSize)
+{
+	return glm::distance(bulletPos, shipPos) <= shipSize;
+}
+
+void restartGame()
+{
+	data = {};
+	renderer.currentCamera.follow(data.playerPos
+		, 550, 0, 0, renderer.windowW, renderer.windowH);
+}
+
 bool initGame()
 {
+	std::srand(std::time(0));
+
 	//initializing stuff for the renderer
 	gl2d::init();
 	renderer.create();
@@ -54,7 +75,8 @@ bool initGame()
 	(RESOURCES_PATH "spaceShip/stitchedFiles/projectiles.png", 500, true);
 	bulletsAtlas = gl2d::TextureAtlasPadding(3, 2, bulletsTexture.GetSize().x, bulletsTexture.GetSize().y);
 
-
+	healthBar.loadFromFile(RESOURCES_PATH "healthBar.png", true);
+	health.loadFromFile(RESOURCES_PATH "health.png", true);
 
 	backgroundTexture[0].loadFromFile(RESOURCES_PATH "background1.png", true);
 	backgroundTexture[1].loadFromFile(RESOURCES_PATH "background2.png", true);
@@ -70,6 +92,8 @@ bool initGame()
 	tiledRenderer[1].paralaxStrength = 0.2;
 	tiledRenderer[2].paralaxStrength = 0.4;
 	tiledRenderer[3].paralaxStrength = 0.7;
+
+	restartGame();
 
 	return true;
 }
@@ -148,9 +172,9 @@ bool gameLogic(float deltaTime)
 
 	for (int i = 0; i < BACKGROUNDS; i++)
 	{
-		//	tiledRenderer[i].render(renderer);
+		tiledRenderer[i].render(renderer);
 	}
-	tiledRenderer[0].render(renderer);
+	//tiledRenderer[0].render(renderer);
 #pragma endregion
 
 
@@ -198,8 +222,60 @@ bool gameLogic(float deltaTime)
 			continue;
 		}
 
+		if (!data.bullets[i].isEnemy)
+		{
+			bool breakBothLoops = false;
+			for (int e = 0; e < data.enemies.size(); e++)
+			{
+				if (intersectBullet(data.bullets[i].position, data.enemies[e].position,
+					enemyShipSize))
+				{
+					data.enemies[e].life -= 0.1;
+
+					if (data.enemies[e].life <= 0)
+					{
+						// kill enemy
+						data.enemies.erase(data.enemies.begin() + e);
+					}
+
+					data.bullets.erase(data.bullets.begin() + i);
+					i--;
+					breakBothLoops = true;
+					continue;
+				}
+			}
+
+			if (breakBothLoops)
+			{
+				continue;
+			}
+		}
+		else
+		{
+			if (intersectBullet(data.bullets[i].position, data.playerPos,
+				shipSize))
+			{
+				data.health -= 0.1;
+
+				data.bullets.erase(data.bullets.begin() + i);
+				i--;
+				continue;
+			}
+		}
+
 		data.bullets[i].update(deltaTime);
 
+	}
+
+	if (data.health <= 0)
+	{
+		// kill player
+		restartGame();
+	}
+	else
+	{
+		data.health += deltaTime * 0.01;
+		data.health = glm::clamp(data.health, 0.f, 1.f);
 	}
 
 #pragma endregion
@@ -208,7 +284,24 @@ bool gameLogic(float deltaTime)
 
 	for (int i = 0; i < data.enemies.size(); i++)
 	{
-		//todo update enemies
+
+		if (glm::distance(data.playerPos, data.enemies[i].position) > 4000.f)
+		{
+			//dispawn enemy
+			data.enemies.erase(data.enemies.begin() + i);
+			i--;
+			continue;
+		}
+
+		if (data.enemies[i].update(deltaTime, data.playerPos))
+		{
+			Bullet b;
+			b.position = data.enemies[i].position;
+			b.fireDirection = data.enemies[i].viewDirection;
+			b.isEnemy = true;
+			//todo speed
+			data.bullets.push_back(b);
+		}
 	}
 
 #pragma endregion
@@ -238,6 +331,31 @@ bool gameLogic(float deltaTime)
 
 #pragma endregion
 
+#pragma region ui
+
+	renderer.pushCamera();
+	{
+
+		glui::Frame f({ 0,0, w, h });
+
+		glui::Box healthBox = glui::Box().xLeftPerc(0.65).yTopPerc(0.1).xDimensionPercentage(0.3).yAspectRatio(1.f / 8.f);
+
+		renderer.renderRectangle(healthBox, healthBar);
+
+		glm::vec4 newRect = healthBox();
+		newRect.z *= data.health;
+
+		glm::vec4 textCoords = { 0,1,1,0 };
+		textCoords.z *= data.health;
+
+		renderer.renderRectangle(newRect, health, Colors_White, {}, {},
+			textCoords);
+
+	}
+	renderer.popCamera();
+
+#pragma endregion
+
 
 
 	renderer.flush();
@@ -252,10 +370,29 @@ bool gameLogic(float deltaTime)
 
 	if (ImGui::Button("Spawn enemy"))
 	{
+
+		glm::uvec2 shipTypes[] = { {0,0}, {0,1}, {2,0}, {3, 1} };
+
 		Enemy e;
 		e.position = data.playerPos;
+
+		e.speed = 800 + rand() % 1000;
+		e.turnSpeed = 2.2f + (rand() & 1000) / 500.f;
+		e.type = shipTypes[rand() % 4];
+		e.fireRange = 1.5 + (rand() % 1000) / 2000.f;
+		e.fireTimeReset = 0.1 + (rand() % 1000) / 500;
+
+		//todo bullet speed
+
 		data.enemies.push_back(e);
 	}
+
+	if (ImGui::Button("Reset Game"))
+	{
+		restartGame;
+	}
+
+	ImGui::SliderFloat("Player Health", &data.health, 0, 1);
 
 	ImGui::End();
 
